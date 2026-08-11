@@ -229,6 +229,18 @@ def read_loginuid(pid):
     return value
 
 
+def read_cwd(pid):
+    """Return the process's working directory, or ``None``.
+
+    Worth recording: it says which project an agent was pointed at, which is
+    often the fastest way to recognise a run as legitimate or not.
+    """
+    try:
+        return os.readlink(_path(pid, "cwd"))
+    except OSError:
+        return None
+
+
 def _rss_kb(pid):
     """Return resident set size in kB from ``/proc/PID/statm``."""
     text = _read_text(_path(pid, "statm"))
