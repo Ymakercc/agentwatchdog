@@ -12,7 +12,7 @@ venv/
 htmlcov/
 
 # Build output of scripts/build_singlefile.py
-/agentwatchdog.py
+/agentwatchdog.pyz
 
 # Never commit captured runtime data — it is host-specific and may not be
 # anonymized the way the exporter output is.

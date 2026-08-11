@@ -39,8 +39,42 @@ UNKNOWN = {
 }
 
 
+def _valid(data, found):
+    if isinstance(data, dict) and data.get("id"):
+        found.append(data)
+
+
+def _load_builtin():
+    """Return the fingerprints shipped inside the package.
+
+    Read through ``importlib.resources`` rather than by path, because the
+    single-file build is a zipapp: there is no directory to list, and
+    ``__file__`` points inside an archive. Falls back to the filesystem so a
+    plain source checkout keeps working.
+    """
+    found = []
+    try:
+        from importlib.resources import files
+
+        for entry in sorted(files(__package__).joinpath("agents.d").iterdir(), key=_name):
+            if entry.name.endswith(".json"):
+                try:
+                    _valid(json.loads(entry.read_text(encoding="utf-8")), found)
+                except (OSError, ValueError):
+                    continue
+        if found:
+            return found
+    except (ImportError, AttributeError, FileNotFoundError, ModuleNotFoundError):
+        pass
+    return _load_dir(BUILTIN_DIR)
+
+
+def _name(entry):
+    return entry.name
+
+
 def _load_dir(directory):
-    """Return the fingerprints in ``directory``, skipping unreadable files."""
+    """Return the fingerprints in a filesystem ``directory``, skipping bad files."""
     found = []
     try:
         names = sorted(os.listdir(directory))
@@ -56,8 +90,7 @@ def _load_dir(directory):
             # A malformed custom fingerprint must not take the monitor down; the
             # remaining agents still get watched.
             continue
-        if isinstance(data, dict) and data.get("id"):
-            found.append(data)
+        _valid(data, found)
     return found
 
 
@@ -68,7 +101,7 @@ def load(extra_dir=None, enabled=None):
     value means every known agent is watched.
     """
     by_id = {}
-    for fingerprint in _load_dir(BUILTIN_DIR):
+    for fingerprint in _load_builtin():
         by_id[fingerprint["id"]] = fingerprint
     if extra_dir:
         for fingerprint in _load_dir(extra_dir):

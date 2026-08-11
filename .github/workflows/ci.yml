@@ -39,6 +39,36 @@ jobs:
       - run: pip install -e '.[dev]'
       - run: pytest
 
+  # The single file has to keep working, because it is how most people will
+  # actually try this: copy one thing to a server and run it. Built and
+  # exercised from a directory where the package is not installed, so a missing
+  # data file or a stray absolute import fails here rather than on someone's
+  # host.
+  single-file:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Build
+        run: python3 scripts/build_singlefile.py /tmp/agentwatchdog.pyz
+      - name: Run it with nothing installed
+        working-directory: /tmp
+        run: |
+          ./agentwatchdog.pyz version
+          ./agentwatchdog.pyz agents
+          ./agentwatchdog.pyz selftest
+      - name: All built-in fingerprints must survive the packaging
+        working-directory: /tmp
+        run: |
+          count=$(./agentwatchdog.pyz agents | head -1 | cut -d' ' -f1)
+          test "$count" -ge 5 || { echo "only $count fingerprints in the archive"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agentwatchdog-pyz
+          path: /tmp/agentwatchdog.pyz
+
   # The redaction and anonymization guarantees in SECURITY.md are the reason
   # anyone would trust this tool on a real host. Run them as their own job so a
   # failure is impossible to miss in the checks list.
