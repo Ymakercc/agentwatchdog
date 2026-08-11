@@ -188,6 +188,47 @@ def _tty_name(tty_nr):
     return f"dev({major},{minor})"
 
 
+def read_uid(pid):
+    """Return the process's real uid, or ``None`` if the process is gone.
+
+    ``/proc/PID/status`` is preferred over ``stat()`` on the directory because it
+    is a plain text field we can reproduce in a fixture tree; test coverage of
+    the identity detector would otherwise require root to chown fixtures.
+    """
+    text = _read_text(_path(pid, "status"))
+    if text:
+        for line in text.splitlines():
+            if line.startswith("Uid:"):
+                parts = line.split()
+                if len(parts) >= 2:
+                    try:
+                        return int(parts[1])
+                    except ValueError:
+                        break
+                break
+    try:
+        return os.stat(_path(pid)).st_uid
+    except OSError:
+        return None
+
+
+#: What the kernel writes in loginuid when no audit login uid has been set.
+_LOGINUID_UNSET = "4294967295"
+
+
+def read_loginuid(pid):
+    """Return the audit login uid, or ``None`` if unset.
+
+    This is the account that originally logged in, and it survives ``su`` and
+    ``sudo``. When it disagrees with the effective user, it answers "who really
+    started this" — the single most useful field in an unexpected-user alert.
+    """
+    value = read_line(_path(pid, "loginuid"))
+    if value in (None, "", _LOGINUID_UNSET):
+        return None
+    return value
+
+
 def _rss_kb(pid):
     """Return resident set size in kB from ``/proc/PID/statm``."""
     text = _read_text(_path(pid, "statm"))
@@ -228,9 +269,8 @@ def process_info(pid, now, btime=None, mem_total_kb=None):
         return None
     argv, raw = read_cmdline(pid)
 
-    try:
-        uid = os.stat(_path(pid)).st_uid
-    except OSError:
+    uid = read_uid(pid)
+    if uid is None:
         return None
 
     abs_start = None
@@ -259,6 +299,8 @@ def process_info(pid, now, btime=None, mem_total_kb=None):
         "raw_cmdline": raw,
         "args": " ".join(argv) if argv else "",
         "tty": _tty_name(stat["tty_nr"]),
+        "loginuid": read_loginuid(pid),
+        "sessionid": read_line(_path(pid, "sessionid")),
         "starttime_ticks": stat["starttime"],
         "abs_start": abs_start,
         "duration_sec": duration,
