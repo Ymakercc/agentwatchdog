@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please report security issues privately through GitHub's
-[private vulnerability reporting](https://github.com/Ymakercc/agentwatchdog/security/advisories/new)
+[private vulnerability reporting](https://github.com/Ymakercc/AgentWatchDog/security/advisories/new)
 rather than opening a public issue. Expect an acknowledgement within a few days.
 
 ## Intended use
