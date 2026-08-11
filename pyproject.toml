@@ -1,0 +1,71 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentwatchdog"
+version = "0.1.0.dev0"
+description = "Host-side runtime audit for terminal AI coding agents. Reads /proc, never your prompts."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Yamike" }]
+keywords = [
+    "ai-agents",
+    "audit",
+    "observability",
+    "security",
+    "sysadmin",
+    "systemd",
+    "linux",
+    "procfs",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: System :: Monitoring",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Security",
+]
+# Deliberately empty. Zero runtime dependencies is a feature, not an oversight:
+# this tool is meant to be droppable onto a bare server with nothing but python3.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Ymakercc/agentwatchdog"
+Issues = "https://github.com/Ymakercc/agentwatchdog/issues"
+Changelog = "https://github.com/Ymakercc/agentwatchdog/blob/main/CHANGELOG.md"
+
+[project.scripts]
+agentwatchdog = "agentwatchdog.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.6"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentwatchdog"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "agents.d", "scripts", "README.md", "LICENSE", "CHANGELOG.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "S"]
+# S404/S603/S607: we shell out to `ps`/`ss`/`systemctl` on purpose, with fixed
+# argument lists and no shell. That is the whole design.
+ignore = ["S404", "S603", "S607"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
