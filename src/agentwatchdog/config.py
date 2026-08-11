@@ -40,6 +40,10 @@ DEFAULTS = {
     "MAX_PER_USER_WINDOW": "10",
     "MAX_PER_PARENT_WINDOW": "8",
     "CPU_ALERT_PCT": "85",
+    # %CPU is a lifetime average, so a process seconds old reads as ~100% while
+    # it starts up. Below this age the CPU check is skipped; without the floor
+    # it fires on nearly every agent launch and gets ignored.
+    "MIN_CPU_SAMPLE_SEC": "300",
     "MEM_ALERT_PCT": "50",
     "RSS_ALERT_MB": "2000",
     "ALERT_COOLDOWN_SEC": "3600",  # minimum gap before re-firing the same alert
