@@ -37,9 +37,9 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/Ymakercc/AgentWatchDog"
-Issues = "https://github.com/Ymakercc/AgentWatchDog/issues"
-Changelog = "https://github.com/Ymakercc/AgentWatchDog/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/Ymakercc/agentwatchdog"
+Issues = "https://github.com/Ymakercc/agentwatchdog/issues"
+Changelog = "https://github.com/Ymakercc/agentwatchdog/blob/main/CHANGELOG.md"
 
 [project.scripts]
 agentwatchdog = "agentwatchdog.cli:main"

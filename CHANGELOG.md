@@ -10,4 +10,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial project skeleton: packaging, license, CI scaffolding.
 
-[Unreleased]: https://github.com/Ymakercc/AgentWatchDog/compare/main...HEAD
+[Unreleased]: https://github.com/Ymakercc/agentwatchdog/compare/main...HEAD
