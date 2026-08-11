@@ -1,0 +1,42 @@
+{
+  "id": "gemini-cli",
+  "name": "Gemini CLI",
+  "notes": "Best-effort: written from published documentation, not verified against an installed binary. The default-deny rule means an incorrect entry here costs detail in the audit log, not a leaked prompt. Corrections welcome — see CONTRIBUTING.md.",
+  "flags_verified": false,
+  "comms": ["gemini"],
+  "path_markers": ["@google/gemini-cli", "/gemini-cli/"],
+  "persistent_markers": [],
+  "redact": {
+    "secret_flags": [
+      "-p",
+      "--prompt",
+      "-i",
+      "--prompt-interactive",
+      "--proxy",
+      "--api-key",
+      "--include-directories"
+    ],
+    "keep_flags": [
+      "-m",
+      "--model",
+      "-s",
+      "--sandbox",
+      "--sandbox-image",
+      "--approval-mode",
+      "-e",
+      "--extensions",
+      "-o",
+      "--output-format"
+    ],
+    "safe_words": [
+      "add",
+      "auth",
+      "extensions",
+      "help",
+      "list",
+      "mcp",
+      "remove",
+      "update"
+    ]
+  }
+}

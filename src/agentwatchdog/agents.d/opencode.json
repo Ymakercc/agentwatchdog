@@ -1,0 +1,35 @@
+{
+  "id": "opencode",
+  "name": "OpenCode",
+  "notes": "Best-effort: written from published documentation, not verified against an installed binary. Deliberately lists only flags we are confident about — an unlisted flag is treated as boolean, which makes the token after it a positional and therefore redacted.",
+  "flags_verified": false,
+  "comms": ["opencode"],
+  "path_markers": ["/opencode", "opencode-ai"],
+  "persistent_markers": ["serve"],
+  "redact": {
+    "secret_flags": ["-p", "--prompt", "--session", "--api-key"],
+    "keep_flags": [
+      "-m",
+      "--model",
+      "--mode",
+      "--agent",
+      "--port",
+      "--hostname",
+      "--log-level"
+    ],
+    "safe_words": [
+      "auth",
+      "github",
+      "help",
+      "list",
+      "login",
+      "logout",
+      "mcp",
+      "models",
+      "run",
+      "serve",
+      "tui",
+      "upgrade"
+    ]
+  }
+}

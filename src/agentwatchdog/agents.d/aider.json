@@ -1,0 +1,42 @@
+{
+  "id": "aider",
+  "name": "aider",
+  "notes": "Best-effort: written from published documentation, not verified against an installed binary. aider takes filenames as positionals, which the default-deny rule redacts along with prompts; that loses some detail but never leaks one.",
+  "flags_verified": false,
+  "comms": ["aider"],
+  "path_markers": ["/aider"],
+  "persistent_markers": [],
+  "redact": {
+    "secret_flags": [
+      "-m",
+      "--message",
+      "--message-file",
+      "-f",
+      "--read",
+      "--file",
+      "--load",
+      "--api-key",
+      "--openai-api-key",
+      "--anthropic-api-key",
+      "--openai-api-base",
+      "--openai-organization-id",
+      "--set-env",
+      "--chat-history-file",
+      "--input-history-file",
+      "--llm-history-file",
+      "--analytics-log"
+    ],
+    "keep_flags": [
+      "--model",
+      "--weak-model",
+      "--editor-model",
+      "--edit-format",
+      "--editor-edit-format",
+      "--reasoning-effort",
+      "--thinking-tokens",
+      "--map-tokens",
+      "--encoding"
+    ],
+    "safe_words": []
+  }
+}
