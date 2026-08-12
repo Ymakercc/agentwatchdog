@@ -760,6 +760,39 @@ pre .p {
 }
 
 /* --------------------------------------------------------------------------
+   404
+   Lives here rather than in a <style> block on the page itself: the pages carry
+   no inline style or script, which is what lets the Content-Security-Policy
+   stay strict instead of nominally present.
+   -------------------------------------------------------------------------- */
+.lost {
+  min-height: 74vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-block: clamp(3rem, 8vw, 6rem);
+}
+
+.lost h1 {
+  font-size: clamp(2.1rem, 5vw, 3.4rem);
+  max-width: 18ch;
+}
+
+/* Already covered, with no sweep to play: nothing arrived to redact. */
+.lost .rd {
+  background-size: 100% 100%;
+  color: transparent;
+}
+
+.lost__zh {
+  margin-top: 2.5rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--rule);
+  font-family: "Archivo", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC",
+    "Microsoft YaHei", sans-serif;
+}
+
+/* --------------------------------------------------------------------------
    Closing + footer
    -------------------------------------------------------------------------- */
 .closing {
