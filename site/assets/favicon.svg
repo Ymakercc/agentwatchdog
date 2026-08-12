@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- A redaction bar over a line of text: the whole product in 32 pixels. -->
+  <rect width="32" height="32" fill="#0d0c0b"/>
+  <rect x="5" y="9" width="9" height="2.5" fill="#7fa8c9"/>
+  <rect x="16" y="9" width="6" height="2.5" fill="#948d84"/>
+  <rect x="5" y="14.75" width="17" height="2.5" fill="#948d84"/>
+  <rect x="5" y="20.5" width="22" height="2.5" fill="#3a3632"/>
+</svg>

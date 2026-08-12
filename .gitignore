@@ -18,3 +18,6 @@ htmlcov/
 # anonymized the way the exporter output is.
 *.jsonl
 state.json
+
+# Playwright browsers, if installed locally for the OG image
+.cache/ms-playwright/

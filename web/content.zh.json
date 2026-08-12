@@ -1,0 +1,292 @@
+{
+  "meta": {
+    "title": "agentwatchdog — 面向 AI 编码 agent 的宿主机侧运行审计",
+    "description": "从 agent 外部观察 Claude Code、Codex CLI、aider 等——在 /proc 里，“配不配合”不是一个变量。不装 hook、不套 wrapper、无法退出。绝不读取你的 prompt。",
+    "canonical": "https://31582749.xyz/zh/",
+    "og_title": "agentwatchdog — 你的 agent 无法对这份审计日志说不",
+    "og_description": "面向终端 AI 编码 agent 的宿主机侧运行审计。只读 /proc，绝不读你的 prompt。"
+  },
+
+  "nav": {
+    "skip": "跳到正文",
+    "github": "GitHub",
+    "sections": [
+      { "href": "#gap", "label": "缺口" },
+      { "href": "#detects", "label": "检测" },
+      { "href": "#privacy", "label": "隐私" },
+      { "href": "#install", "label": "安装" }
+    ]
+  },
+
+  "hero": {
+    "eyebrow": "观测记录",
+    "h1": "这台机器上没有任何东西，有权决定自己要不要被审计。",
+    "lead": "agentwatchdog 从 agent 外部观察——在 `/proc` 里，“配不配合”不是一个变量。它绝不读取你的 prompt，而且有一条测试专门在它读了的时候失败。",
+    "scan": {
+      "title": "扫描 · 4 个进程",
+      "replay": "重播",
+      "caption": "命令行是合成的，规则是真的。工具本身从不写下原始字符串——脱敏发生在落盘之前，所以你机器上并不存在一个可供还原的“之前”。",
+      "lines": [
+        {
+          "src": "/proc/2759430/cmdline",
+          "cmd": "claude -p [[\"周五之前把预发数据库的凭据轮换掉\"]] --model opus",
+          "rule": "secret_flags",
+          "note": "-p 后面跟的是 prompt"
+        },
+        {
+          "src": "/proc/821321/cmdline",
+          "cmd": "codex exec [[\"给复盘会整理一份事故时间线\"]] --sandbox read-only",
+          "rule": "位置参数 · 默认拒绝",
+          "note": "codex 的 prompt 就是裸参数"
+        },
+        {
+          "src": "/proc/3104882/cmdline",
+          "cmd": "aider -m [[\"修一下鉴权那个 bug\"]] --api-key [[sk-EXAMPLE-NOT-A-REAL-KEY-000]]",
+          "rule": "secret_flags · 凭证形态",
+          "note": "两条规则各盖一次"
+        },
+        {
+          "src": "/proc/3104960/cmdline",
+          "cmd": "spindle [[chat]] [[\"起草迁移方案\"]] --task [[\"internal\"]]",
+          "rule": "无指纹",
+          "note": "一个从没见过的 agent——所有位置参数照样全部拒绝"
+        }
+      ]
+    },
+    "cta": {
+      "command": "./agentwatchdog.pyz dry-run",
+      "copy": "复制",
+      "copied": "已复制",
+      "note": "什么都不写，什么都不发。可以直接在你不放心的那台机器上跑。"
+    }
+  },
+
+  "sections": [
+    {
+      "id": "gap",
+      "type": "ledger",
+      "tag": "缺口",
+      "h2": "你现有的工具，需要被监控方配合才有效。",
+      "intro": "agent 内部的可观测方案——OTel exporter、hook、wrapper 命令、代理——只在 agent 愿意配合时工作。不设那个环境变量、不装那个 hook、直接调用二进制，它就瞎了。而跑飞的 cron、配错的服务单元、不该出现在这里的账号，恰恰是永远不会配合的那些。",
+      "head": { "them": "agent 内部工具", "us": "agentwatchdog" },
+      "rows": [
+        {
+          "label": "观察位置",
+          "them": "agent 进程内部",
+          "us": "宿主机的 `/proc`"
+        },
+        {
+          "label": "能否被绕过",
+          "them": "能——不配合即失效",
+          "us": "**不能。** 进程存在，就会被看见"
+        },
+        {
+          "label": "依赖",
+          "them": "collector、Docker、Node 包",
+          "us": "无。Python 3 标准库与 systemd"
+        },
+        {
+          "label": "prompt 内容",
+          "them": "部分工具逐字读取会话记录",
+          "us": "绝不读取；落盘之前先脱敏"
+        },
+        {
+          "label": "回答什么",
+          "them": "token、成本、会话细节",
+          "us": "谁在跑什么、被谁拉起、表现如何"
+        },
+        {
+          "label": "服务于",
+          "them": "键盘前的开发者",
+          "us": "这台机器的运维者"
+        }
+      ],
+      "note": "两者都值得有。想要按 token 计费的仪表盘，请用 OTel 系的工具——本项目不是那个。这里做的是这台机器的审计日志。"
+    },
+
+    {
+      "id": "detects",
+      "type": "rows",
+      "tag": "检测器",
+      "h2": "六件值得把你叫醒的事。",
+      "intro": "每条告警都带着下一步该敲的命令。重复告警按“情形”而不是按“扫描次数”抑制——一个账号跑了五十个 agent 是一条结论，因为每六十秒响一次的监控，最终会被人关掉。",
+      "rows": [
+        {
+          "tag": "unexpected_user",
+          "severity": "严重",
+          "severity_critical": true,
+          "body": "白名单 `ALLOWED_USERS` 之外的账号跑了 agent。告警携带 `loginuid`，于是“alice 通过 sudo 以 root 身份跑了 agent”是一个事实，而不是一个谜。"
+        },
+        {
+          "tag": "parent_spawn_storm",
+          "severity": "严重",
+          "severity_critical": true,
+          "body": "同一个父进程在持续拉起 agent。人类不会这么干——这是重启循环，而且每次尝试都在计费。告警携带完整祖先链，因为 agent 是症状，父进程才是病灶。"
+        },
+        {
+          "tag": "user_high_frequency",
+          "severity": "警告",
+          "body": "某个账号启动 agent 的速度，超过了人手输入的可能。"
+        },
+        {
+          "tag": "long_running_process",
+          "severity": "警告",
+          "body": "非交互 agent 超过了时限。交互式会话与 SDK 会话被豁免：一个有人正坐在前面的会话不是挂死进程，把它当挂死处理，这个检测在它本该服务的机器上就废了。"
+        },
+        {
+          "tag": "high_cpu · high_mem",
+          "severity": "警告",
+          "body": "持续性的资源异常。用生命周期均值并设了最小采样年龄——否则每个 agent 启动时都会飙的那一下，会变成每个 agent 都触发一次的告警。"
+        },
+        {
+          "tag": "agents_during_high_load",
+          "severity": "警告",
+          "body": "多个 agent 挤在一台已经吃力的机器上。没有任何单个进程有错，而这正是别的工具都不会报它的原因。"
+        }
+      ]
+    },
+
+    {
+      "id": "privacy",
+      "type": "rows",
+      "tag": "隐私契约",
+      "h2": "五条承诺，每条都挂着一个违约即失败的测试。",
+      "intro": "这个工具靠读命令行吃饭。这件事只有在约束被强制执行、而不是被口头描述时才可接受——所以下面每一条都接着一个测试，CI 把它们作为独立 job 运行，失败不可能被忽略。",
+      "rows": [
+        {
+          "tag": "test_environ_is_never_opened",
+          "tag_class": "signal code",
+          "h3": "绝不读取环境变量。",
+          "body": "任何代码路径都不会打开 `/proc/PID/environ`。测试记录一次扫描期间的每一次 `open()`，该文件一旦出现即失败。住在环境变量里的 API key，不可能经由这个工具泄露。"
+        },
+        {
+          "tag": "test_prompt_never_survives_redaction",
+          "tag_class": "signal code",
+          "h3": "prompt 永不落盘。",
+          "body": "命令行在写入之前就按 agent 各自的规则脱敏——因为每家 CLI 放 prompt 的位置都不一样。"
+        },
+        {
+          "tag": "test_unknown_flag_is_assumed_boolean",
+          "tag_class": "signal code",
+          "h3": "位置参数默认拒绝。",
+          "body": "一个参数只有在指纹明确认可它是已知子命令时才能留下。认不出的 flag 一律按布尔量处理，于是它后面那个 token 也会被盖住。比这个版本更晚发布的 agent 泄不出任何东西，只是记录得更粗略。"
+        },
+        {
+          "tag": "test_credentials_are_redacted_in_any_position",
+          "tag_class": "signal code",
+          "h3": "凭证形态在任何位置都会被盖住。",
+          "body": "各家 key 前缀、JWT、长不透明 token，即使出现在没有任何规则预料到的位置也会被打码——而那恰恰是有人把命令粘错时凭证会去的地方。"
+        },
+        {
+          "tag": "test_export_reports_only_permitted_keys",
+          "tag_class": "signal code",
+          "h3": "允许离开主机的数据，从构造上就是匿名的。",
+          "body": "摘要是按固定形状从零拼装的，不是从事件里过滤字段得来的，之后还要在运行时对照 key 白名单校验。证明不了匿名的导出会被拒绝，而不是被发布。"
+        }
+      ],
+      "note": "跑一下 `agentwatchdog selftest`，看这些承诺对你机器上真实运行的 agent 是否成立——不是对我们的机器。"
+    },
+
+    {
+      "id": "agents",
+      "type": "table",
+      "tag": "agents.d",
+      "h2": "检测是数据，不是代码。",
+      "intro": "每个 agent 是一份 JSON 指纹，描述如何识别它、以及它把 prompt 放在哪。运维者可以在 `/etc/agentwatchdog/agents.d` 里添加或修正指纹，不必等新版本；而“一份指纹 + 一条脱敏测试”是这个项目最欢迎的 pull request。",
+      "columns": ["Agent", "flag 表", "prompt 在哪"],
+      "rows": [
+        {
+          "agent": "Claude Code",
+          "verified": true,
+          "flags": "已对真机核验",
+          "prompt": "裸位置参数，以及 `-p`"
+        },
+        {
+          "agent": "OpenAI Codex CLI",
+          "verified": true,
+          "flags": "已对真机核验",
+          "prompt": "位置参数，顶层与 `exec` 之后都有"
+        },
+        {
+          "agent": "aider",
+          "verified": true,
+          "flags": "已对 0.86.2 核验",
+          "prompt": "`-m`、`--message`、`--msg`"
+        },
+        {
+          "agent": "Gemini CLI",
+          "verified": false,
+          "flags": "按文档编写",
+          "prompt": "`-p`、`--prompt`"
+        },
+        {
+          "agent": "OpenCode",
+          "verified": false,
+          "flags": "按文档编写",
+          "prompt": "`run` 之后的位置参数"
+        }
+      ],
+      "note": "真机核验抓到的两个坑，可以作为“别凭记忆写这种表”的佐证。其一，Codex 在顶层就接受位置 prompt，不只在 `exec` 之后。其二，Codex 的 `-p` 是 `--profile`，而 Claude Code 的 `-p` 是 prompt——把一家的规则搬给另一家，工具会认真地把 profile 名打码，然后把真正的 prompt 写进磁盘。两个坑现在都是回归测试。"
+    },
+
+    {
+      "id": "install",
+      "type": "steps",
+      "tag": "安装",
+      "h2": "先看，再装。",
+      "intro": "一个文件，无需构建，除 `python3` 外零依赖。仅支持 Linux——因为这套设计本身就是 `/proc`。",
+      "steps": [
+        {
+          "tag": "1 · 看",
+          "lines": [
+            "curl -fsSLO https://github.com/Ymakercc/agentwatchdog/releases/latest/download/agentwatchdog.pyz",
+            "chmod +x agentwatchdog.pyz",
+            "./agentwatchdog.pyz dry-run",
+            "# 不写文件、不发消息、不更新任何状态"
+          ],
+          "note": "在你自己的机器上，看到一次扫描的完整输出——而此时工具还什么都没做过。"
+        },
+        {
+          "tag": "2 · 验",
+          "lines": ["./agentwatchdog.pyz selftest"],
+          "note": "对全部内置指纹、以及你正站着的这台机器上真实运行的命令行，验证脱敏规则。"
+        },
+        {
+          "tag": "3 · 装",
+          "lines": [
+            "sudo mv agentwatchdog.pyz /usr/local/bin/agentwatchdog",
+            "sudo agentwatchdog install",
+            "# systemd timer、配置、日志轮转。在 NOTIFY 另行配置之前，",
+            "# 告警只留在本地。"
+          ]
+        }
+      ]
+    }
+  ],
+
+  "closing": {
+    "h2": "把它指向你最没底的那台机器。",
+    "links": [
+      {
+        "label": "源码与文档",
+        "href": "https://github.com/Ymakercc/agentwatchdog"
+      },
+      {
+        "label": "安全策略",
+        "href": "https://github.com/Ymakercc/agentwatchdog/blob/main/SECURITY.md"
+      },
+      {
+        "label": "贡献一份 agent 指纹",
+        "href": "https://github.com/Ymakercc/agentwatchdog/blob/main/CONTRIBUTING.md"
+      }
+    ]
+  },
+
+  "footer": {
+    "tag": "版本说明",
+    "notes": [
+      "Apache-2.0。独立项目，与 Anthropic、OpenAI、Google 或任何 agent 厂商无隶属或背书关系；文中产品名称仅用于指认被观察的软件。",
+      "它只观察与报告——不是沙箱，也不是防线。仅用于你拥有或已获授权审计的主机，并且在设计上就不适合用来监视人：没有 prompt、没有击键、没有文件内容。"
+    ]
+  }
+}

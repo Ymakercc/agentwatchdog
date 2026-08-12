@@ -69,6 +69,20 @@ jobs:
           name: agentwatchdog-pyz
           path: /tmp/agentwatchdog.pyz
 
+  # site/ is committed so Cloudflare Pages needs no build command and a deploy
+  # cannot break. The cost of that is drift, so the build is re-run here and
+  # the committed output has to match — otherwise the Chinese page quietly
+  # falls a release behind the English one, which is the exact failure the
+  # generator exists to prevent.
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 web/build.py --check
+
   # The redaction and anonymization guarantees in SECURITY.md are the reason
   # anyone would trust this tool on a real host. Run them as their own job so a
   # failure is impossible to miss in the checks list.

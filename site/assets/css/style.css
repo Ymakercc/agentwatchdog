@@ -1,0 +1,946 @@
+/* ==========================================================================
+   agentwatchdog — archival record
+   --------------------------------------------------------------------------
+   Direction: a room where records are kept, not a terminal. The page borrows
+   the vocabulary of archival documents — a marginal reference column, hairline
+   rules, machine identifiers as labels, and the redaction bar as the one
+   recurring graphic device.
+
+   No framework, no build step, no runtime dependency. The tool this describes
+   ships as one file with nothing but the standard library; its site should not
+   need more than that either.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Faces. Latin is self-hosted (no third-party request, no layout shift).
+   CJK deliberately falls back to the system stack: any web font covering
+   Chinese is megabytes even subset, and would break the performance the rest
+   of this page is built to keep.
+   -------------------------------------------------------------------------- */
+@font-face {
+  font-family: "Fraunces";
+  src: url("../fonts/fraunces.woff2") format("woff2-variations");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Archivo";
+  src: url("../fonts/archivo.woff2") format("woff2-variations");
+  font-weight: 400 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plex Mono";
+  src: url("../fonts/plexmono-0.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plex Mono";
+  src: url("../fonts/plexmono-1.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* Ground is warm near-black, not #000: pure black reads as terminal chrome,
+     this reads as archival board. */
+  --ink: #0d0c0b;
+  --plate: #171614;
+  --rule: #2b2825;
+  --rule-strong: #3d3833;
+  --paper: #e4e1d9;
+  --muted: #948d84;
+
+  /* Cyanotype. The archival photographic process — a record made by exposure,
+     which is exactly what the tool does to /proc. Used only to mark the
+     software's own judgement: which rule fired, which link acts. */
+  --signal: #7fa8c9;
+  /* Quiet enough to sit under the signal, bright enough to still clear 4.5:1
+     on the page ground — it labels the /proc path each line was read from,
+     which is content, not decoration. */
+  --signal-dim: #6788a8;
+  /* Purely decorative: underline colour, where no contrast minimum applies. */
+  --signal-faint: #4d6f8c;
+
+  /* The redaction bar reads as removal, so it is neutral. Colouring it would
+     make concealment look decorative. */
+  --bar: #3a3632;
+
+  --serif: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --sans: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: "Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --gutter: clamp(1.25rem, 5vw, 3rem);
+  --measure: 64ch;
+  --section-y: clamp(4.5rem, 11vw, 9rem);
+
+  /* The marginal reference column: where machine identifiers live. Wide enough
+     that the longest real test name wraps to two lines rather than colliding
+     with the heading beside it. */
+  --margin-col: 14.5rem;
+}
+
+/* CJK pages swap the body and display stacks for system faces. */
+[lang="zh-Hans"] {
+  --serif: "Fraunces", "Songti SC", "Noto Serif CJK SC", "Noto Serif SC",
+    "Source Han Serif SC", serif;
+  --sans: "Archivo", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC",
+    "Microsoft YaHei", sans-serif;
+  --measure: 40em;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--sans);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* --------------------------------------------------------------------------
+   Type scale
+   -------------------------------------------------------------------------- */
+h1,
+h2,
+h3 {
+  font-family: var(--serif);
+  font-weight: 400;
+  margin: 0;
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: clamp(2.6rem, 7.2vw, 5.25rem);
+  line-height: 0.98;
+  letter-spacing: -0.021em;
+  /* Optical size high: display cuts of Fraunces carry far more stroke contrast,
+     which is where the editorial authority comes from. */
+  font-variation-settings: "opsz" 144;
+}
+
+h2 {
+  font-size: clamp(1.85rem, 3.6vw, 2.9rem);
+  line-height: 1.08;
+  letter-spacing: -0.014em;
+  font-variation-settings: "opsz" 96;
+}
+
+h3 {
+  font-size: clamp(1.15rem, 1.6vw, 1.35rem);
+  line-height: 1.25;
+  font-variation-settings: "opsz" 30;
+}
+
+/* Chinese needs its own scale, not the Latin one with the text swapped.
+   Han glyphs are full-width and far heavier at a given size, so a headline set
+   at the Latin display size reads as shouting; the tracking that tightens a
+   Latin display face does nothing for them, and the leading that suits a
+   38pt serif is too tight to separate the lines. */
+[lang="zh-Hans"] h1 {
+  font-size: clamp(1.9rem, 4.2vw, 3.3rem);
+  line-height: 1.28;
+  letter-spacing: 0;
+}
+
+[lang="zh-Hans"] h2 {
+  font-size: clamp(1.5rem, 2.7vw, 2.15rem);
+  line-height: 1.36;
+  letter-spacing: 0;
+}
+
+[lang="zh-Hans"] h3 {
+  line-height: 1.5;
+}
+
+[lang="zh-Hans"] .hero h1 {
+  max-width: 20ch;
+}
+
+[lang="zh-Hans"] .closing h2 {
+  max-width: 22ch;
+}
+
+p {
+  margin: 0 0 1.1em;
+  max-width: var(--measure);
+}
+
+a {
+  color: var(--signal);
+  text-decoration-color: var(--signal-faint);
+  text-underline-offset: 0.22em;
+  text-decoration-thickness: 1px;
+  transition: color 0.16s ease, text-decoration-color 0.16s ease;
+}
+
+a:hover {
+  color: var(--paper);
+  text-decoration-color: var(--paper);
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+  border-radius: 1px;
+}
+
+::selection {
+  background: var(--signal);
+  color: var(--ink);
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--mono);
+  font-size: 0.9em;
+}
+
+/* The recurring label: a machine identifier, set as one. */
+.tag {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0;
+}
+
+.tag--signal {
+  color: var(--signal);
+}
+
+/* Real identifiers from the source tree. They keep their own casing, because
+   upper-casing test_environ_is_never_opened would print a name that does not
+   exist — and the point of putting it here is that you can go and read it. */
+.tag--code {
+  text-transform: none;
+  letter-spacing: 0.01em;
+  line-height: 1.45;
+  overflow-wrap: break-word;
+}
+
+.tag--critical {
+  color: #cf8f7d;
+}
+
+.lead {
+  font-size: clamp(1.1rem, 1.5vw, 1.28rem);
+  line-height: 1.55;
+  color: #cbc6bc;
+  max-width: 48ch;
+}
+
+.dim {
+  color: var(--muted);
+}
+
+/* --------------------------------------------------------------------------
+   Shell
+   -------------------------------------------------------------------------- */
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--signal);
+  color: var(--ink);
+  padding: 0.75rem 1.25rem;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  z-index: 100;
+}
+
+.skip:focus {
+  left: 0;
+}
+
+.wrap {
+  width: 100%;
+  max-width: 74rem;
+  margin: 0 auto;
+  padding-inline: var(--gutter);
+}
+
+.masthead {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--ink) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--rule);
+}
+
+.masthead__inner {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  height: 3.5rem;
+}
+
+.wordmark {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--paper);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.wordmark:hover {
+  color: var(--signal);
+}
+
+.wordmark b {
+  font-weight: 500;
+  color: var(--signal);
+}
+
+.masthead nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1.35rem;
+}
+
+.masthead nav a {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.masthead nav a:hover {
+  color: var(--paper);
+}
+
+.lang {
+  display: flex;
+  gap: 0.4rem;
+  padding-left: 1.1rem;
+  border-left: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 0.76rem;
+}
+
+.lang [aria-current="true"] {
+  color: var(--paper);
+}
+
+/* --------------------------------------------------------------------------
+   Sections. The marginal reference column is the layout signature: archival
+   records put their reference marks in the margin, and here that mark is the
+   real identifier the software uses.
+   -------------------------------------------------------------------------- */
+.section {
+  padding-block: var(--section-y);
+  border-top: 1px solid var(--rule);
+}
+
+.section__head {
+  display: grid;
+  grid-template-columns: var(--margin-col) minmax(0, 1fr);
+  gap: 0 2.5rem;
+  margin-bottom: clamp(2.5rem, 5vw, 4rem);
+}
+
+.section__head .tag {
+  padding-top: 0.55rem;
+}
+
+.section__head p {
+  margin-top: 1.1rem;
+  margin-bottom: 0;
+  color: #cbc6bc;
+}
+
+.rows {
+  display: grid;
+  gap: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: var(--margin-col) minmax(0, 1fr);
+  gap: 0 2.5rem;
+  padding-block: 1.75rem;
+  border-top: 1px solid var(--rule);
+}
+
+.row:last-child {
+  border-bottom: 1px solid var(--rule);
+}
+
+.row__ref {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: flex-start;
+}
+
+.row__body p {
+  margin-bottom: 0;
+}
+
+.row__body h3 + p {
+  margin-top: 0.5rem;
+}
+
+/* --------------------------------------------------------------------------
+   Hero
+   -------------------------------------------------------------------------- */
+.hero {
+  padding-top: clamp(3.5rem, 8vw, 6.5rem);
+  padding-bottom: var(--section-y);
+}
+
+.hero__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: clamp(1.5rem, 3vw, 2.25rem);
+}
+
+.hero__eyebrow::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  max-width: 14rem;
+  background: var(--rule-strong);
+}
+
+.hero h1 {
+  max-width: 15ch;
+}
+
+.hero__lead {
+  margin-top: clamp(1.5rem, 3vw, 2rem);
+}
+
+.hero__cta {
+  margin-top: clamp(2.25rem, 4vw, 3rem);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.5rem;
+}
+
+/* The one solid button on the page. Everything else is a rule or a link. */
+.copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: transparent;
+  border: 1px solid var(--rule-strong);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  padding: 0.7rem 1rem;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.copy:hover {
+  border-color: var(--signal);
+  background: var(--plate);
+}
+
+.copy__label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-left: 1px solid var(--rule-strong);
+  padding-left: 0.85rem;
+}
+
+.copy:hover .copy__label,
+.copy[data-copied="true"] .copy__label {
+  color: var(--signal);
+}
+
+.hero__note {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   The scan — page signature.
+   Real command lines arrive, then the parts that must never reach disk are
+   covered in front of you. The last one belongs to an agent with no
+   fingerprint at all, and is covered anyway.
+   -------------------------------------------------------------------------- */
+.scan {
+  margin-top: clamp(2.5rem, 5vw, 3.75rem);
+  border: 1px solid var(--rule);
+  background: var(--plate);
+}
+
+.scan__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1.1rem;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.scan__pulse {
+  width: 6px;
+  height: 6px;
+  background: var(--signal);
+  border-radius: 50%;
+  flex: none;
+}
+
+.scan__replay {
+  margin-left: auto;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font: inherit;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0.2rem 0;
+}
+
+.scan__replay:hover {
+  color: var(--signal);
+}
+
+.scan__body {
+  padding: clamp(1rem, 2.5vw, 1.6rem) clamp(1rem, 2.5vw, 1.6rem)
+    clamp(1.25rem, 3vw, 1.9rem);
+  display: grid;
+  gap: 1.15rem;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 15rem;
+  gap: 0.35rem 1.75rem;
+  align-items: baseline;
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.line[data-state="in"],
+.line[data-state="done"] {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.line__src {
+  grid-column: 1 / -1;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--signal-dim);
+  letter-spacing: 0.04em;
+}
+
+.line__cmd {
+  font-family: var(--mono);
+  font-size: clamp(0.78rem, 1.35vw, 0.9rem);
+  line-height: 1.75;
+  color: var(--paper);
+  word-break: break-word;
+}
+
+/* The bar sweeps left-to-right over the text, then the text underneath is
+   given up entirely — no selection, no colour. In the tool itself the raw
+   string is never written at all; this only shows what the rules decide. */
+/* The bar is painted as a background that sweeps left to right, not as an
+   overlaid box. A long prompt wraps across lines on a phone, and an absolutely
+   positioned cover would balloon into one rectangle over the whole bounding
+   box; a cloned background decoration covers each line fragment the way a pen
+   would. */
+.rd {
+  display: inline;
+  color: inherit;
+  padding: 0.12em 0.1em;
+  background-image: linear-gradient(var(--bar), var(--bar));
+  background-repeat: no-repeat;
+  background-position: left center;
+  background-size: 0% 100%;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition:
+    background-size 0.34s cubic-bezier(0.6, 0.02, 0.3, 1),
+    color 0.12s linear 0.26s;
+}
+
+.line[data-state="done"] .rd {
+  background-size: 100% 100%;
+  color: transparent;
+  user-select: none;
+}
+
+.line__rule {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--signal);
+  opacity: 0;
+  transition: opacity 0.3s ease 0.3s;
+  /* Left-aligned in its own column so the rules form a second ledger column,
+     rather than floating at varying distances from the lines they judge. */
+  text-align: left;
+}
+
+.line[data-state="done"] .line__rule {
+  opacity: 1;
+}
+
+.line__rule b {
+  display: block;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.scan__caption {
+  margin: 0;
+  padding: 0 clamp(1rem, 2.5vw, 1.6rem) clamp(1rem, 2.5vw, 1.4rem);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: none;
+}
+
+/* --------------------------------------------------------------------------
+   The gap — a ledger, not a feature table
+   -------------------------------------------------------------------------- */
+.ledger {
+  margin: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.ledger__head,
+.ledger__row {
+  display: grid;
+  grid-template-columns: var(--margin-col) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 2.5rem;
+  border-bottom: 1px solid var(--rule);
+  padding-block: 1.1rem;
+}
+
+.ledger__head {
+  padding-block: 0.75rem;
+}
+
+.ledger dt {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-top: 0.2rem;
+}
+
+.ledger dd {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.ledger__them {
+  color: var(--muted);
+}
+
+.ledger__us {
+  color: var(--paper);
+}
+
+.ledger__us strong {
+  font-weight: 600;
+  color: var(--signal);
+}
+
+/* --------------------------------------------------------------------------
+   Agents table
+   -------------------------------------------------------------------------- */
+.agents {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.agents th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 0 0.85rem;
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.agents td {
+  padding: 0.95rem 1.5rem 0.95rem 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: baseline;
+}
+
+.agents td:first-child {
+  font-weight: 500;
+}
+
+.agents .verified {
+  color: var(--signal);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+}
+
+.agents .best-effort {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+}
+
+/* --------------------------------------------------------------------------
+   Install
+   -------------------------------------------------------------------------- */
+pre {
+  margin: 0;
+  padding: 1.1rem 1.25rem;
+  background: var(--plate);
+  border: 1px solid var(--rule);
+  overflow-x: auto;
+  font-size: 0.84rem;
+  line-height: 1.75;
+  color: var(--paper);
+}
+
+pre .c {
+  color: var(--muted);
+}
+
+pre .p {
+  color: var(--signal-dim);
+  user-select: none;
+}
+
+.install__note {
+  margin-top: 0.9rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/* --------------------------------------------------------------------------
+   Closing + footer
+   -------------------------------------------------------------------------- */
+.closing {
+  padding-block: var(--section-y);
+  border-top: 1px solid var(--rule);
+}
+
+.closing h2 {
+  max-width: 18ch;
+}
+
+.closing__actions {
+  margin-top: 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.75rem;
+  align-items: center;
+}
+
+.footer {
+  border-top: 1px solid var(--rule);
+  padding-block: 2.75rem 3.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.footer__grid {
+  display: grid;
+  grid-template-columns: var(--margin-col) minmax(0, 1fr);
+  gap: 1rem 2.5rem;
+}
+
+.footer p {
+  max-width: 60ch;
+  margin-bottom: 0.75rem;
+}
+
+.footer a {
+  color: var(--muted);
+  text-decoration-color: var(--rule-strong);
+}
+
+.footer a:hover {
+  color: var(--signal);
+}
+
+/* --------------------------------------------------------------------------
+   Phone: laid out for the phone, not compressed from the desktop.
+   The marginal column collapses to a line above its content — a margin note
+   only works when there is a margin. In the ledger, the verdict for this tool
+   leads and the comparison follows, because on a small screen the argument has
+   to survive even if only the first line is read.
+   -------------------------------------------------------------------------- */
+@media (max-width: 62rem) {
+  .line {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.3rem;
+  }
+
+  /* The note stays on its own line. Running it inline after the rule name to
+     save height produced "secret_flags-p takes a prompt", which reads as one
+     broken string. */
+  .line__rule {
+    padding-top: 0.15rem;
+  }
+}
+
+@media (max-width: 48rem) {
+  :root {
+    --measure: 100%;
+  }
+
+  .masthead__inner {
+    height: 3.25rem;
+    gap: 1rem;
+  }
+
+  .masthead nav {
+    gap: 1rem;
+  }
+
+  .masthead nav .navlink {
+    display: none;
+  }
+
+  .section__head,
+  .row,
+  .footer__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+  }
+
+  .section__head .tag,
+  .row__ref .tag {
+    padding-top: 0;
+  }
+
+  .row__ref {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .ledger__head {
+    display: none;
+  }
+
+  .ledger__row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+    padding-block: 1.35rem;
+  }
+
+  .ledger dd {
+    padding-left: 1rem;
+    border-left: 1px solid var(--rule-strong);
+  }
+
+  /* Question, then this tool's answer, then the comparison. The verdict comes
+     before the alternative because on a phone the second column is what the
+     reader came for — but it still has to come after the thing it answers. */
+  .ledger__us {
+    order: 1;
+    border-left-color: var(--signal-dim);
+  }
+
+  .ledger__them {
+    order: 2;
+  }
+
+  .ledger__them::before {
+    content: attr(data-label);
+    display: block;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--rule-strong);
+    margin-bottom: 0.2rem;
+  }
+
+  .ledger__us::before {
+    content: attr(data-label);
+    display: block;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--signal-dim);
+    margin-bottom: 0.2rem;
+  }
+
+  .agents {
+    font-size: 0.9rem;
+  }
+
+  .agents td {
+    padding-right: 0.75rem;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Reduced motion: the scan is the argument, so it still gets made — it is
+   simply already finished when you arrive.
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .line {
+    opacity: 1;
+    transform: none;
+  }
+}

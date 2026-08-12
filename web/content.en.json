@@ -1,0 +1,292 @@
+{
+  "meta": {
+    "title": "agentwatchdog — host-side runtime audit for AI coding agents",
+    "description": "Watches Claude Code, Codex CLI, aider and others from outside the agent — from /proc, where cooperation isn’t a variable. No hooks, no wrappers, no opt-out. Never reads your prompts.",
+    "canonical": "https://31582749.xyz/",
+    "og_title": "agentwatchdog — your agents can’t opt out of this audit log",
+    "og_description": "Host-side runtime audit for terminal AI coding agents. Reads /proc, never your prompts."
+  },
+
+  "nav": {
+    "skip": "Skip to content",
+    "github": "GitHub",
+    "sections": [
+      { "href": "#gap", "label": "the gap" },
+      { "href": "#detects", "label": "detects" },
+      { "href": "#privacy", "label": "privacy" },
+      { "href": "#install", "label": "install" }
+    ]
+  },
+
+  "hero": {
+    "eyebrow": "Record of observation",
+    "h1": "Nothing on this host gets to decide whether it’s audited.",
+    "lead": "agentwatchdog watches AI coding agents from outside the agent — from `/proc`, where cooperation isn’t a variable. It never reads your prompts, and there is a test that fails if it ever does.",
+    "scan": {
+      "title": "Scan · 4 processes",
+      "replay": "Replay",
+      "caption": "Synthetic command lines, real rules. In the tool itself the raw string is never written at all — redaction happens before anything reaches disk, so there is no “before” on your host to reconstruct.",
+      "lines": [
+        {
+          "src": "/proc/2759430/cmdline",
+          "cmd": "claude -p [[\"rotate the staging database credentials before Friday\"]] --model opus",
+          "rule": "secret_flags",
+          "note": "-p takes a prompt"
+        },
+        {
+          "src": "/proc/821321/cmdline",
+          "cmd": "codex exec [[\"summarise the incident timeline for the postmortem\"]] --sandbox read-only",
+          "rule": "positional · default-deny",
+          "note": "codex carries prompts as bare arguments"
+        },
+        {
+          "src": "/proc/3104882/cmdline",
+          "cmd": "aider -m [[\"patch the auth bug\"]] --api-key [[sk-EXAMPLE-NOT-A-REAL-KEY-000]]",
+          "rule": "secret_flags · credential shape",
+          "note": "masked twice over"
+        },
+        {
+          "src": "/proc/3104960/cmdline",
+          "cmd": "spindle [[chat]] [[\"draft the migration plan\"]] --task [[\"internal\"]]",
+          "rule": "no fingerprint",
+          "note": "an agent we have never seen — every positional denied anyway"
+        }
+      ]
+    },
+    "cta": {
+      "command": "./agentwatchdog.pyz dry-run",
+      "copy": "Copy",
+      "copied": "Copied",
+      "note": "Writes nothing. Sends nothing. Safe on the host you’re suspicious about."
+    }
+  },
+
+  "sections": [
+    {
+      "id": "gap",
+      "type": "ledger",
+      "tag": "The gap",
+      "h2": "The tooling you already have needs the agent’s cooperation.",
+      "intro": "In-agent observability — OTel exporters, hooks, wrapper commands, proxies — works only while the agent plays along. Skip the environment variable, don’t install the hook, call the binary directly, and it goes blind. The runaway cron job, the misconfigured unit and the account that shouldn’t be here are precisely the cases that never play along.",
+      "head": { "them": "In-agent tooling", "us": "agentwatchdog" },
+      "rows": [
+        {
+          "label": "Vantage point",
+          "them": "Inside the agent process",
+          "us": "The host’s `/proc`"
+        },
+        {
+          "label": "Can be bypassed",
+          "them": "Yes — by not cooperating",
+          "us": "**No.** A process that exists is seen"
+        },
+        {
+          "label": "Dependencies",
+          "them": "A collector, Docker, Node packages",
+          "us": "None. Python 3 standard library and systemd"
+        },
+        {
+          "label": "Prompt content",
+          "them": "Some read session transcripts verbatim",
+          "us": "Never read; redacted before anything is written"
+        },
+        {
+          "label": "Answers",
+          "them": "Tokens, cost, session detail",
+          "us": "Who ran what, spawned by whom, behaving how"
+        },
+        {
+          "label": "Built for",
+          "them": "The developer at the keyboard",
+          "us": "The operator of the host"
+        }
+      ],
+      "note": "Both are worth having. If you want per-token cost dashboards, use an OTel-based tool — this is not that. This is the audit trail for the machine."
+    },
+
+    {
+      "id": "detects",
+      "type": "rows",
+      "tag": "Detectors",
+      "h2": "Six things worth waking up for.",
+      "intro": "Every alert carries the command to run next. Repeats are suppressed per situation rather than per scan — one account running fifty agents is one finding, because a monitor that fires every sixty seconds is a monitor somebody turns off.",
+      "rows": [
+        {
+          "tag": "unexpected_user",
+          "severity": "Critical",
+          "severity_critical": true,
+          "body": "An account outside `ALLOWED_USERS` ran an agent. The alert carries `loginuid`, so “alice ran an agent as root via sudo” arrives as a fact instead of a mystery."
+        },
+        {
+          "tag": "parent_spawn_storm",
+          "severity": "Critical",
+          "severity_critical": true,
+          "body": "One parent process keeps spawning agents. No human does this — it is a restart loop, and it bills you for every attempt. The alert carries the ancestry, because the agent is the symptom and the parent is the bug."
+        },
+        {
+          "tag": "user_high_frequency",
+          "severity": "Warning",
+          "body": "One account is starting agents faster than a person types."
+        },
+        {
+          "tag": "long_running_process",
+          "severity": "Warning",
+          "body": "A non-interactive agent outlived its limit. Interactive and SDK sessions are exempt: a session someone is sitting in front of is not a hung process, and treating it as one makes this useless on exactly the hosts it is for."
+        },
+        {
+          "tag": "high_cpu · high_mem",
+          "severity": "Warning",
+          "body": "Sustained abnormal resource use. Measured as a lifetime average with a minimum sample age, so the spike every agent produces while starting up doesn’t become an alert every agent produces."
+        },
+        {
+          "tag": "agents_during_high_load",
+          "severity": "Warning",
+          "body": "Several agents landing on a host that is already struggling. No single process is at fault, which is exactly why nothing else reports it."
+        }
+      ]
+    },
+
+    {
+      "id": "privacy",
+      "type": "rows",
+      "tag": "The privacy contract",
+      "h2": "Five promises, each with a test that fails if it breaks.",
+      "intro": "This thing reads command lines for a living. That is only acceptable if the limits are enforced rather than described — so every one below is wired to a test, and CI runs them as their own job, where a failure is impossible to miss.",
+      "rows": [
+        {
+          "tag": "test_environ_is_never_opened",
+          "tag_class": "signal code",
+          "h3": "Environment variables are never read.",
+          "body": "`/proc/PID/environ` is not opened on any code path. The test records every `open()` during a scan and fails if that file appears. API keys living in the environment cannot pass through this tool."
+        },
+        {
+          "tag": "test_prompt_never_survives_redaction",
+          "tag_class": "signal code",
+          "h3": "Prompts never reach disk.",
+          "body": "Command lines are redacted before they are written, using per-agent rules — because every CLI keeps its prompt somewhere different."
+        },
+        {
+          "tag": "test_unknown_flag_is_assumed_boolean",
+          "tag_class": "signal code",
+          "h3": "Positional arguments are denied by default.",
+          "body": "An argument survives only if a fingerprint vouches for it as a known subcommand. An unrecognised flag is treated as boolean, so the token after it is covered too. An agent released after this version leaks nothing; it only shows up with less detail."
+        },
+        {
+          "tag": "test_credentials_are_redacted_in_any_position",
+          "tag_class": "signal code",
+          "h3": "Credential shapes are masked wherever they appear.",
+          "body": "Provider key prefixes, JWTs and long opaque tokens are masked even in positions no rule anticipated — which is where a credential ends up when somebody pastes a command wrong."
+        },
+        {
+          "tag": "test_export_reports_only_permitted_keys",
+          "tag_class": "signal code",
+          "h3": "What may leave the host is anonymous by construction.",
+          "body": "The summary is assembled from scratch into a fixed shape rather than filtered out of an event, then checked against a key allowlist at runtime. An export that cannot be proven anonymous is refused, not published."
+        }
+      ],
+      "note": "Run `agentwatchdog selftest` to watch these hold against the agents actually running on your machine, not against ours."
+    },
+
+    {
+      "id": "agents",
+      "type": "table",
+      "tag": "agents.d",
+      "h2": "Detection is data, not code.",
+      "intro": "Each agent is a JSON fingerprint describing how to recognise it and where it carries its prompt. Operators can add or correct one in `/etc/agentwatchdog/agents.d` without waiting for a release, and a fingerprint plus one redaction test is the easiest useful pull request this project takes.",
+      "columns": ["Agent", "Flag table", "Where the prompt lives"],
+      "rows": [
+        {
+          "agent": "Claude Code",
+          "verified": true,
+          "flags": "Verified against the binary",
+          "prompt": "Bare positional, and `-p`"
+        },
+        {
+          "agent": "OpenAI Codex CLI",
+          "verified": true,
+          "flags": "Verified against the binary",
+          "prompt": "Positional, at top level and after `exec`"
+        },
+        {
+          "agent": "aider",
+          "verified": true,
+          "flags": "Verified against 0.86.2",
+          "prompt": "`-m`, `--message`, `--msg`"
+        },
+        {
+          "agent": "Gemini CLI",
+          "verified": false,
+          "flags": "From documentation",
+          "prompt": "`-p`, `--prompt`"
+        },
+        {
+          "agent": "OpenCode",
+          "verified": false,
+          "flags": "From documentation",
+          "prompt": "Positional after `run`"
+        }
+      ],
+      "note": "Two traps the verified tables caught, as a caution against writing these from memory. Codex takes a prompt as a positional at the top level, not only after `exec`. And Codex’s `-p` is `--profile`, while Claude Code’s `-p` is the prompt — port one agent’s rules to the other and the tool dutifully masks a profile name while writing the prompt to disk. Both are now regression tests."
+    },
+
+    {
+      "id": "install",
+      "type": "steps",
+      "tag": "Install",
+      "h2": "Look first. Install second.",
+      "intro": "One file, nothing to build, no dependency beyond `python3`. Linux only — the design is `/proc`.",
+      "steps": [
+        {
+          "tag": "1 · Look",
+          "lines": [
+            "curl -fsSLO https://github.com/Ymakercc/agentwatchdog/releases/latest/download/agentwatchdog.pyz",
+            "chmod +x agentwatchdog.pyz",
+            "./agentwatchdog.pyz dry-run",
+            "# writes nothing, sends nothing, updates no state"
+          ],
+          "note": "The complete output of a scan, on your host, before the tool has done anything at all."
+        },
+        {
+          "tag": "2 · Check",
+          "lines": ["./agentwatchdog.pyz selftest"],
+          "note": "Proves the redaction rules against every built-in fingerprint and against the command lines actually running on the machine you are standing on."
+        },
+        {
+          "tag": "3 · Install",
+          "lines": [
+            "sudo mv agentwatchdog.pyz /usr/local/bin/agentwatchdog",
+            "sudo agentwatchdog install",
+            "# systemd timer, config, log rotation. Alerts stay local",
+            "# until NOTIFY says otherwise."
+          ]
+        }
+      ]
+    }
+  ],
+
+  "closing": {
+    "h2": "Point it at the host you’re least sure about.",
+    "links": [
+      {
+        "label": "Source and documentation",
+        "href": "https://github.com/Ymakercc/agentwatchdog"
+      },
+      {
+        "label": "Security policy",
+        "href": "https://github.com/Ymakercc/agentwatchdog/blob/main/SECURITY.md"
+      },
+      {
+        "label": "Add an agent fingerprint",
+        "href": "https://github.com/Ymakercc/agentwatchdog/blob/main/CONTRIBUTING.md"
+      }
+    ]
+  },
+
+  "footer": {
+    "tag": "Colophon",
+    "notes": [
+      "Apache-2.0. An independent project, not affiliated with or endorsed by Anthropic, OpenAI, Google or any other agent vendor; product names identify the software being observed.",
+      "It observes and reports — it is not a sandbox and not a containment boundary. Intended for hosts you own or are authorised to audit, and deliberately unsuitable for surveilling people: no prompts, no keystrokes, no file contents."
+    ]
+  }
+}

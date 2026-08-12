@@ -1,0 +1,24 @@
+# Cloudflare Pages headers.
+#
+# The site has no inline script and no inline style, so the policy can be
+# strict rather than nominally present. Nothing is loaded from anywhere else:
+# the fonts are self-hosted precisely so that reading this page does not tell
+# a third party you read it.
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Content-Type-Options: nosniff
+  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), microphone=(), payment=(), usb=(), interest-cohort=()
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+
+# Fingerprinted only by content, so revalidate the markup but let the rest sit
+# in cache. Fonts are the bulk of the payload and never change within a build.
+/assets/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*
+  Cache-Control: public, max-age=604800
+
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
