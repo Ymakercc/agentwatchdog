@@ -3,7 +3,9 @@
 **面向终端 AI 编码 agent 的宿主机侧运行审计。不装 hook、不套 wrapper、被监控方无法退出——只读 `/proc`，绝不碰你的 prompt。**
 
 > **状态**：功能已完备，目前正与前身工具在一台生产 VPS 上并行烧机验证，
-> 结束后打 `v0.1.0`。仅支持 Linux。[English](README.md)
+> 结束后打 `v0.1.0`。仅支持 Linux。
+>
+> [31582749.xyz](https://31582749.xyz/zh/) &middot; [English](README.md)
 
 ---
 

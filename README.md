@@ -4,7 +4,9 @@
 
 > **Status:** feature-complete, currently in a burn-in period running side by side
 > with its predecessor on a production VPS. `v0.1.0` will be tagged when that
-> soak completes. Linux only. [中文文档](README.zh-CN.md)
+> soak completes. Linux only.
+>
+> [31582749.xyz](https://31582749.xyz/) &middot; [中文文档](README.zh-CN.md)
 
 ---
 
