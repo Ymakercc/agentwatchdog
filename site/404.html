@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Not found — agentwatchdog</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0d0c0b">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/css/style.css">
+<style>
+  /* One page, both languages: a 404 is short enough that showing both beats
+     guessing which one the reader wanted. */
+  .lost {
+    min-height: 78vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .lost h1 {
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+    max-width: 18ch;
+  }
+  .lost .rd {
+    background-size: 100% 100%;
+    color: transparent;
+  }
+  .lost__zh {
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--rule);
+    font-family: "Archivo", "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap masthead__inner">
+    <a class="wordmark" href="/">agent<b>watchdog</b></a>
+    <nav aria-label="Sections">
+      <a class="masthead__gh" href="https://github.com/Ymakercc/agentwatchdog">GitHub&#8239;↗</a>
+      <span class="lang">
+        <a href="/" lang="en">EN</a>
+        <a href="/zh/" lang="zh-Hans">中文</a>
+      </span>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap lost">
+  <p class="tag hero__eyebrow">404 &middot; no such record</p>
+
+  <h1>Nothing here, and nothing <span class="rd">redacted</span> either.</h1>
+
+  <p class="lead">
+    This page does not exist &mdash; which is different from a page whose
+    contents were deliberately withheld. Try the
+    <a href="/">front page</a> or the
+    <a href="https://github.com/Ymakercc/agentwatchdog">source</a>.
+  </p>
+
+  <div class="lost__zh" lang="zh-Hans">
+    <p class="lead">
+      这个页面不存在——和“内容被刻意抹去”是两回事。回到
+      <a href="/zh/">中文首页</a>，或去看
+      <a href="https://github.com/Ymakercc/agentwatchdog">源码</a>。
+    </p>
+  </div>
+</main>
+
+</body>
+</html>

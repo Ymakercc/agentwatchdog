@@ -353,7 +353,7 @@ def build():
         if path.is_file():
             files["assets/" + str(path.relative_to(ROOT / "assets"))] = path.read_bytes()
 
-    for name in ("_headers", "robots.txt", "sitemap.xml"):
+    for name in ("_headers", "robots.txt", "sitemap.xml", "404.html"):
         source = ROOT / name
         if source.exists():
             files[name] = source.read_bytes()
