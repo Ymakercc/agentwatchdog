@@ -37,7 +37,15 @@ def event(**overrides):
     return base
 
 
-def context(processes=(), invocations=(), cfg=None, cores=4, load5=0.5):
+def context(
+    processes=(),
+    invocations=(),
+    cfg=None,
+    cores=4,
+    load5=0.5,
+    spawn_streaks=(),
+    fork_rate=None,
+):
     settings = config.load("/nonexistent")
     settings.update(cfg or {})
     return detect.Context(
@@ -47,7 +55,23 @@ def context(processes=(), invocations=(), cfg=None, cores=4, load5=0.5):
         invocations=list(invocations),
         cores=cores,
         load5=load5,
+        spawn_streaks=tuple(spawn_streaks),
+        fork_rate=fork_rate,
     )
+
+
+def streak(ppid=900, count=3, span=120, **overrides):
+    """A parent found starting a fresh agent on ``count`` scans in a row."""
+    record = {
+        "ppid": ppid,
+        "count": count,
+        "first_ts": NOW - span,
+        "last_ts": NOW,
+        "user": "root",
+        "agent": "codex",
+    }
+    record.update(overrides)
+    return record
 
 
 def types(findings):
@@ -165,6 +189,57 @@ def test_spawn_storm_is_critical_and_names_the_parent():
 # --------------------------------------------------------------------------
 # resource
 # --------------------------------------------------------------------------
+
+
+def test_a_streak_of_scans_is_a_storm_even_when_nothing_can_be_counted():
+    """A restart loop is invisible to the window count; the streak is what sees it."""
+    findings = list(detect.frequency.detect(context(spawn_streaks=[streak(count=3)])))
+
+    assert types(findings) == ["parent_spawn_storm"]
+    assert findings[0].severity == "critical"
+    assert findings[0].extra["consecutive_scans"] == 3
+    assert "consecutive scans" in findings[0].reason
+    # The operator has to be told the number they can see is not the real rate.
+    assert "higher" in findings[0].reason
+
+
+def test_a_short_streak_is_not_yet_a_storm():
+    assert list(detect.frequency.detect(context(spawn_streaks=[streak(count=2)]))) == []
+
+
+def test_a_streak_spread_over_hours_is_not_consecutive():
+    """Counting scans only means anything if the scans were adjacent in time."""
+    findings = list(detect.frequency.detect(context(spawn_streaks=[streak(count=3, span=40_000)])))
+
+    assert findings == []
+
+
+def test_the_streak_threshold_can_be_turned_off():
+    findings = list(
+        detect.frequency.detect(
+            context(spawn_streaks=[streak(count=9)], cfg={"MIN_SPAWN_STREAK": "0"})
+        )
+    )
+
+    assert findings == []
+
+
+def test_the_host_fork_rate_rides_along_as_corroboration():
+    """A loop whose attempts die between scans shows up here and nowhere else."""
+    findings = list(detect.frequency.detect(context(spawn_streaks=[streak()], fork_rate=42.5)))
+
+    assert findings[0].extra["host_fork_rate_per_sec"] == 42.5
+
+
+def test_a_parent_is_reported_once_however_many_ways_it_qualifies():
+    """Both paths can describe the same parent; two alerts for one loop is noise."""
+    invocations = [{"ts": NOW, "user": "root", "ppid": 900, "agent": "codex"} for _ in range(20)]
+
+    findings = list(
+        detect.frequency.detect(context(invocations=invocations, spawn_streaks=[streak()]))
+    )
+
+    assert types(findings).count("parent_spawn_storm") == 1
 
 
 def test_high_cpu_fires_for_a_sustained_burn():

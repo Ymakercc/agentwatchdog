@@ -65,7 +65,7 @@ sudo agentwatchdog install        # systemd timer + 配置 + logrotate
 | 告警 | 级别 | 含义 |
 |---|---|---|
 | `unexpected_user` | critical | 白名单外的账号跑了 agent。带 `loginuid`，所以「alice 通过 sudo 以 root 身份跑了 agent」是一条明确告警，不是谜题 |
-| `parent_spawn_storm` | critical | 同一个父进程持续拉起 agent。人类不会这么干——这是重启循环，每次尝试都在计费。告警携带父进程的完整祖先链 |
+| `parent_spawn_storm` | critical | 同一个父进程持续拉起 agent。人类不会这么干——这是重启循环，每次尝试都在计费。判据是*连续多次扫描*而不是数启动次数，所以比扫描间隔更快的循环照样抓得到。告警携带父进程的完整祖先链 |
 | `user_high_frequency` | warning | 一个账号启动 agent 的速度远超人手输入 |
 | `long_running_process` | warning | 非交互 agent 超时未退——大概率挂死 |
 | `high_cpu` / `high_mem` | warning | 持续性资源异常（生命周期均值，启动瞬间的峰值不会误报） |
@@ -86,7 +86,7 @@ sudo agentwatchdog install        # systemd timer + 配置 + logrotate
 4. **形似凭证的值在任何位置都会被打码**——各家 key 前缀、JWT、长不透明 token。
 5. **允许离开主机的数据从构造上就是匿名的。** `export` 输出计数与时间桶，按固定形状拼装并在*运行时*对照 key 白名单校验——证明不了匿名的导出直接拒绝，而不是发布出去。
 
-原始命令行只保留 SHA-256 摘要，可以关联相同调用，无法还原内容。
+命令行只保留摘要，用于关联相同调用。摘要是 HMAC，密钥每台主机单独生成、存在日志目录之外、永不导出——因为一个普通哈希紧挨着 `codex exec <redacted>` 放着，等于告诉对方命令的形状、只剩提示词要猜，猜一次算一次哈希就能确认。没有密钥就不写摘要：退回无密钥哈希是唯一不能做的事。
 
 在你自己的机器上跑 `agentwatchdog selftest`，亲眼看这些承诺对真实运行中的 agent 成立。
 
@@ -121,6 +121,7 @@ NOTIFY=jsonl                       # 追加 exec 和/或 webhook 以外发
 
 - **仅 Linux。** 设计本身就*是* `/proc`。macOS（`libproc`）在路线图上；不打算支持 Windows。
 - **进程级，不是内容级。** 它告诉你 agent *跑过*、谁跑的、表现如何——刻意不告诉你*它被问了什么*。
+- **它是采样的。** 每 `--interval` 秒（默认 60 秒，对齐到整分钟）拍一张快照。在两次扫描之间起止的 agent 不会被看见，所以短命一次性调用的计数是下界。重启循环的判定不依赖抓到其中任何一次尝试，而且风暴告警会附上内核的 fork 速率，让你看到进程列表看不到的量级。
 - **只观察，不拦截。** 这是审计辅助，不是沙箱，更不是防线：root 可以像停任何 systemd 单元一样停掉它。
 - **仅用于你拥有或获授权审计的主机。** 它在设计上就不适合暗中监视人——没有 prompt、没有击键、没有文件内容——让它变成那种东西的贡献会被拒绝。见 [SECURITY.md](SECURITY.md)。
 

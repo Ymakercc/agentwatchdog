@@ -133,6 +133,28 @@ def boot_time():
     return None
 
 
+def fork_count():
+    """Return the kernel's cumulative process-creation count, or ``None``.
+
+    The ``processes`` line of ``/proc/stat`` counts every fork since boot and
+    only ever increases. Two readings bracket a scan interval, which gives the
+    host's process-creation rate for free — and unlike anything derived from the
+    process list, it does not depend on a process still being alive when the
+    scan happens to look. A restart loop faster than the scan interval is
+    invisible in the process list and obvious here.
+    """
+    text = _read_text(os.path.join(PROC, "stat"))
+    if not text:
+        return None
+    for line in text.splitlines():
+        if line.startswith("processes"):
+            try:
+                return int(line.split()[1])
+            except (IndexError, ValueError):
+                return None
+    return None
+
+
 def load_avg():
     """Return the 1/5/15-minute load averages, or ``(None, None, None)``."""
     text = _read_text(os.path.join(PROC, "loadavg"))

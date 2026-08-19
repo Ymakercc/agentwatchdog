@@ -16,7 +16,7 @@ import shutil
 import subprocess
 import sys
 
-from . import config
+from . import config, digest
 
 SERVICE_PATH = "/etc/systemd/system/agentwatchdog.service"
 TIMER_PATH = "/etc/systemd/system/agentwatchdog.timer"
@@ -50,14 +50,45 @@ TIMER_TEMPLATE = """\
 Description=Run agentwatchdog every {interval}s
 
 [Timer]
-OnBootSec={interval}
-OnUnitActiveSec={interval}
-AccuracySec=5s
+{schedule}
+# systemd is allowed to defer a timer to batch wakeups; at the default accuracy
+# that alone stretches a 60s interval to roughly 65s.
+AccuracySec=1s
 Unit=agentwatchdog.service
 
 [Install]
 WantedBy=timers.target
 """
+
+
+def timer_schedule(interval):
+    """Return the activation directive for a scan every ``interval`` seconds.
+
+    ``OnUnitActiveSec`` measures from the last activation and accumulates
+    whatever systemd added on top, so the interval it produces is longer than
+    the one asked for and drifts around the clock: measured over eight days on a
+    real host, ``OnUnitActiveSec=60`` with the previous ``AccuracySec=5s`` ran
+    1334 times a day instead of 1440. That 7% is not cosmetic — the detectors
+    count in scans, and short-lived agent processes are missed in proportion.
+
+    A calendar schedule is anchored to the clock, so the interval holds. It only
+    expresses intervals that divide a minute or an hour evenly; anything else
+    falls back to the relative form, which is at least no longer blurred by the
+    accuracy window.
+    """
+    # A repetition equal to the whole field is not a valid step ("0/60" is
+    # rejected outright), so the exact minute and hour are spelled out.
+    if interval == 60:
+        return "OnCalendar=*:*:00"
+    if interval == 3600:
+        return "OnCalendar=*:00:00"
+    if 0 < interval < 60 and 60 % interval == 0:
+        return f"OnCalendar=*:*:0/{interval}"
+    minutes = interval // 60
+    if 60 < interval < 3600 and interval % 60 == 0 and 60 % minutes == 0:
+        return f"OnCalendar=*:0/{minutes}:00"
+    return f"OnBootSec={interval}\nOnUnitActiveSec={interval}"
+
 
 LOGROTATE_TEMPLATE = """\
 # Rotated daily, kept for a month, and also cut at 50M so one noisy day cannot
@@ -139,8 +170,14 @@ def install(cfg, interval=60, config_path=None, out=print):
     out(f"service         {SERVICE_PATH}")
 
     with open(TIMER_PATH, "w", encoding="utf-8") as fh:
-        fh.write(TIMER_TEMPLATE.format(interval=interval))
+        fh.write(TIMER_TEMPLATE.format(interval=interval, schedule=timer_schedule(interval)))
     out(f"timer           {TIMER_PATH} (every {interval}s)")
+
+    key_path = cfg.get("DIGEST_KEY_PATH") or config.DEFAULTS["DIGEST_KEY_PATH"]
+    if digest.create_key(key_path) is None:
+        out(f"digest key      {key_path} (could not be created; digests disabled)")
+    else:
+        out(f"digest key      {key_path} (0600, never leaves this host)")
 
     with open(LOGROTATE_PATH, "w", encoding="utf-8") as fh:
         fh.write(LOGROTATE_TEMPLATE.format(log_dir=log_dir))
@@ -180,9 +217,11 @@ def uninstall(cfg, purge=False, config_path=None, out=print):
         if os.path.isdir(log_dir):
             shutil.rmtree(log_dir, ignore_errors=True)
             out(f"removed         {log_dir}")
-        if os.path.exists(config_path):
-            os.remove(config_path)
-            out(f"removed         {config_path}")
+        key_path = cfg.get("DIGEST_KEY_PATH") or config.DEFAULTS["DIGEST_KEY_PATH"]
+        for path in (config_path, key_path):
+            if os.path.exists(path):
+                os.remove(path)
+                out(f"removed         {path}")
     else:
         out(f"kept            {cfg['LOG_DIR']} and {config_path} (use --purge to remove)")
     return 0

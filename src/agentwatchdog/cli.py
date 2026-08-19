@@ -14,7 +14,7 @@ import os
 import sys
 import time
 
-from . import __version__, agents, collector, config, export, install, redact, state
+from . import __version__, agents, collector, config, digest, export, install, redact, state
 
 USAGE = f"""\
 agentwatchdog - host-side runtime audit for terminal AI coding agents
@@ -221,6 +221,12 @@ def _selftest(cfg):
         cfg.get("AGENTS_DIR"), enabled=config.get_list(cfg, "ENABLED_AGENTS")
     )
     print(f"fingerprints      {len(fingerprints)}")
+
+    key_path = cfg.get("DIGEST_KEY_PATH") or config.DEFAULTS["DIGEST_KEY_PATH"]
+    if digest.load_key(key_path) is None:
+        print(f"digest key        {key_path} (absent, digests omitted)")
+    else:
+        print(f"digest key        {key_path} (present)")
 
     now = int(time.time())
     events, unavailable = collector.observe(cfg, now)

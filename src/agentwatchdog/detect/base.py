@@ -42,3 +42,9 @@ class Context(NamedTuple):
     cores: int
     #: Five-minute load average, or ``None`` if unavailable.
     load5: float
+    #: Per-parent consecutive-scan spawn streaks, from persisted state. Empty
+    #: when the caller has no history to offer, e.g. a hand-built test context.
+    spawn_streaks: tuple = ()
+    #: Host-wide process creations per second since the previous scan, or
+    #: ``None`` on the first scan and after a reboot.
+    fork_rate: float = None

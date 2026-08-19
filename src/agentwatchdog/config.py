@@ -37,8 +37,17 @@ DEFAULTS = {
     # --- detection thresholds ------------------------------------------------
     "MAX_RUNTIME_SEC": "14400",  # 4h; a non-interactive agent past this is hung
     "WINDOW_SEC": "300",  # sliding window for the frequency detectors
+    # Starts per account and per parent process inside WINDOW_SEC. Both only
+    # count agents that were still alive when a scan looked, so they find a
+    # parent launching many agents at once, not one restarting the same agent
+    # in a loop. MIN_SPAWN_STREAK is what finds the loop.
     "MAX_PER_USER_WINDOW": "10",
     "MAX_PER_PARENT_WINDOW": "8",
+    # Consecutive scans on which one parent process must be found starting a
+    # fresh agent before it is called a spawn storm. Independent of how long the
+    # attempts live, so it catches a restart loop faster than the scan interval.
+    # 0 disables it.
+    "MIN_SPAWN_STREAK": "3",
     "CPU_ALERT_PCT": "85",
     # %CPU is a lifetime average, so a process seconds old reads as ~100% while
     # it starts up. Below this age the CPU check is skipped; without the floor
@@ -52,6 +61,10 @@ DEFAULTS = {
     # Concurrent non-persistent agents needed to alert while under load.
     "HIGH_LOAD_AGENT_MIN": "3",
     # --- collection ----------------------------------------------------------
+    # Key for the per-invocation correlation digest, created on install. Kept
+    # out of LOG_DIR on purpose: shipping the logs somewhere must not ship the
+    # ability to test guesses against the digests. No key means no digest.
+    "DIGEST_KEY_PATH": "/etc/agentwatchdog.key",
     # Established-connection counts per process. Cheap, but needs `ss`.
     "COLLECT_NET": "1",
     # --- output --------------------------------------------------------------

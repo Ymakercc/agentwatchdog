@@ -93,7 +93,7 @@ agents seen            : claude-code, codex
 | Alert | Severity | Meaning |
 |---|---|---|
 | `unexpected_user` | critical | An account outside `ALLOWED_USERS` ran an agent. Reports `loginuid`, so "alice ran an agent as root via sudo" is one alert, not a mystery. |
-| `parent_spawn_storm` | critical | One parent process keeps spawning agents. No human does this — it is a restart loop billing you for every attempt. The alert carries the parent's ancestry. |
+| `parent_spawn_storm` | critical | One parent process keeps spawning agents. No human does this — it is a restart loop billing you for every attempt. Found by *consecutive scans*, not by counting starts, so a loop faster than the scan interval is still caught. The alert carries the parent's ancestry. |
 | `user_high_frequency` | warning | One account is starting agents far faster than people type. |
 | `long_running_process` | warning | A non-interactive agent outlived its limit — probably hung. |
 | `high_cpu` / `high_mem` | warning | Sustained abnormal resource use (lifetime average, so launch spikes don't false-positive). |
@@ -129,8 +129,12 @@ and tested in CI as a separate job that blocks release:
    key allowlist *at runtime* — an export that cannot be proven anonymous is
    refused, not published.
 
-A SHA-256 digest of the raw command line is stored so identical invocations can
-be correlated without storing what they said.
+A digest of the command line is stored so identical invocations can be
+correlated. It is an HMAC under a key generated per host, kept outside the log
+directory and never exported — because a plain hash sitting next to
+`codex exec <redacted>` tells an attacker the shape and leaves only the prompt
+to guess, and one hash of a guess would confirm it. No key, no digest: the
+unkeyed fallback is the one thing this must not do.
 
 Run `agentwatchdog selftest` on your own host to watch these hold against the
 agents actually running there.
@@ -179,6 +183,12 @@ NOTIFY=jsonl                       # add exec and/or webhook to deliver
   Windows is not planned.
 - **Process-level, not content-level.** It tells you *that* an agent ran, who
   ran it, and how it behaved — deliberately never *what it was asked*.
+- **It samples.** A scan is a snapshot every `--interval` seconds (60 by
+  default, anchored to the clock). An agent that starts and exits between two
+  scans is never seen, so counts of short one-shot invocations are a lower
+  bound. Detection of a restart loop does not depend on catching any particular
+  attempt, and the host's kernel fork rate is attached to storm alerts so you
+  can see the magnitude the process list cannot show.
 - **It observes; it does not block.** This is an audit aid, not a sandbox, and
   not a containment boundary: root can disable it like any systemd unit.
 - **For hosts you own or are authorized to audit.** It is unsuitable for covert

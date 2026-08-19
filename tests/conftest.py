@@ -10,9 +10,11 @@ that matter most — a spawn storm, an unexpected user, a four-hour hang.
 layout the kernel uses, and repoints the module at them. Nothing here needs root.
 """
 
+import shutil
+
 import pytest
 
-from agentwatchdog import procfs
+from agentwatchdog import config, procfs
 
 #: Ticks per second assumed when writing fixture stat files. Matches the value
 #: procfs reads from sysconf on every mainstream Linux build.
@@ -38,13 +40,25 @@ class FakeProc:
         self._write_host_files()
 
     def _write_host_files(self):
+        self.forks = 12345
         (self.root / "stat").write_text(
-            f"cpu  1 2 3 4 5 6 7 8 9 10\nbtime {self.btime}\nprocesses 12345\n"
+            f"cpu  1 2 3 4 5 6 7 8 9 10\nbtime {self.btime}\nprocesses {self.forks}\n"
         )
         (self.root / "loadavg").write_text("0.50 0.40 0.30 2/300 12345\n")
         (self.root / "meminfo").write_text(
             f"MemTotal:       {FIXTURE_MEM_TOTAL_KB} kB\nMemFree:         100000 kB\n"
         )
+
+    def set_fork_count(self, value):
+        """Set the kernel's cumulative process-creation counter."""
+        self.forks = value
+        (self.root / "stat").write_text(
+            f"cpu  1 2 3 4 5 6 7 8 9 10\nbtime {self.btime}\nprocesses {value}\n"
+        )
+
+    def remove(self, pid):
+        """Take a process off the fixture host, as exiting would."""
+        shutil.rmtree(self.root / str(pid), ignore_errors=True)
 
     def set_load(self, one, five, fifteen):
         """Set the host load averages reported by the fixture."""
@@ -137,3 +151,14 @@ def fake_proc(tmp_path, monkeypatch):
     monkeypatch.setattr(procfs, "_UID_CACHE", {0: "root", 1000: "alice", 1001: "mallory"})
 
     return FakeProc(root)
+
+
+@pytest.fixture(autouse=True)
+def _digest_key_stays_in_the_sandbox(tmp_path, monkeypatch):
+    """Keep the suite from creating the real host's digest key.
+
+    The default path is under ``/etc``, and a scan creates the key if it is
+    missing — which, run as root, a test suite would happily do to the machine
+    it is running on.
+    """
+    monkeypatch.setitem(config.DEFAULTS, "DIGEST_KEY_PATH", str(tmp_path / "agentwatchdog.key"))

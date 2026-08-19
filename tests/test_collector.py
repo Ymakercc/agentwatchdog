@@ -6,6 +6,7 @@ prompt reaching disk because redaction was wired up after the write, a dry run
 that turns out not to be dry.
 """
 
+import hashlib
 import json
 
 from agentwatchdog import collector, config, state
@@ -61,8 +62,107 @@ def test_the_raw_command_line_is_kept_only_as_a_digest(fake_proc, tmp_path):
     event = read_events(tmp_path)[0]
 
     # Enough to correlate identical invocations, not enough to read them.
-    assert len(event["cmdline_sha256"]) == 32
-    assert PROMPT not in event["cmdline_sha256"]
+    assert len(event["cmdline_digest"]) == 32
+    assert PROMPT not in event["cmdline_digest"]
+
+
+def test_the_digest_cannot_be_reproduced_from_the_command_line_alone(fake_proc, tmp_path):
+    """Without this the digest is a guess-and-compare oracle for the prompt.
+
+    The redacted command line sits in the same record, so anyone holding the log
+    knows the shape and has only the prompt to guess. If the digest were a plain
+    hash, one hash of a guess would confirm it.
+    """
+    argv = ["/usr/bin/codex", "exec", PROMPT]
+    fake_proc.add(100, argv, comm="codex")
+
+    collector.scan(cfg(tmp_path), now=fake_proc.now)
+    digest_value = read_events(tmp_path)[0]["cmdline_digest"]
+
+    raw = b"".join(arg.encode() + b"\x00" for arg in argv)
+    for guess in (raw, raw.rstrip(b"\x00"), " ".join(argv).encode()):
+        assert not hashlib.sha256(guess).hexdigest().startswith(digest_value)
+        assert not hashlib.md5(guess).hexdigest().startswith(digest_value)  # noqa: S324
+
+
+def test_the_same_invocation_digests_the_same_and_a_different_host_does_not(fake_proc, tmp_path):
+    argv = ["/usr/bin/codex", "exec", PROMPT]
+    fake_proc.add(100, argv, comm="codex")
+    fake_proc.add(101, argv, comm="codex")
+
+    collector.scan(cfg(tmp_path), now=fake_proc.now)
+    first, second = (event["cmdline_digest"] for event in read_events(tmp_path))
+    assert first == second
+
+    other_host = cfg(tmp_path, DIGEST_KEY_PATH=str(tmp_path / "other.key"))
+    fake_proc.add(102, argv, comm="codex")
+    collector.scan(other_host, now=fake_proc.now + 60)
+    assert read_events(tmp_path)[-1]["cmdline_digest"] != first
+
+
+def test_without_a_key_the_digest_is_omitted_rather_than_unkeyed(fake_proc, tmp_path):
+    """Degrading to a plain hash would silently restore the oracle."""
+    fake_proc.add(100, ["/usr/bin/codex", "exec", PROMPT], comm="codex")
+    unwritable = cfg(tmp_path, DIGEST_KEY_PATH="/proc/nonexistent/agentwatchdog.key")
+
+    summary, *_ = collector.scan(unwritable, now=fake_proc.now)
+    event = read_events(tmp_path)[0]
+
+    assert event["cmdline_digest"] is None
+    assert "cmdline_digest" in event["unavailable_fields"]
+    assert summary["agent_processes"] == 1
+
+
+def test_a_restart_loop_faster_than_the_scan_interval_is_still_found(fake_proc, tmp_path):
+    """The storm the previous release could not see.
+
+    A supervisor restarting a crashing agent has one instance alive at a time,
+    so a scan can count at most one start and a five-minute window holds at most
+    five scans — never reaching a threshold of eight, however fast the loop runs.
+    What gives it away is that every scan finds a *different* fresh instance.
+    """
+    settings = cfg(tmp_path)
+    fake_proc.add(900, ["/usr/bin/supervisord"], comm="supervisord")
+
+    alerts = []
+    for index in range(4):
+        fake_proc.remove(1000 + index - 1)
+        fake_proc.add(
+            1000 + index,
+            ["/usr/bin/codex", "exec", PROMPT],
+            comm="codex",
+            ppid=900,
+            age_sec=2,
+        )
+        _, _, scan_alerts, _ = collector.scan(settings, now=fake_proc.now + index * 60)
+        alerts.extend(scan_alerts)
+
+    storms = [alert for alert in alerts if alert["alert_type"] == "parent_spawn_storm"]
+    assert len(storms) == 1, "fired once, then held by the cooldown"
+    storm = storms[0]
+    assert storm["ppid"] == 900
+    assert storm["severity"] == "critical"
+    assert storm["consecutive_scans"] >= 3
+    # The counting path could not have produced this: it never got near its own
+    # threshold, which is the whole reason the streak exists.
+    assert storm["count"] < config.get_int(settings, "MAX_PER_PARENT_WINDOW", 8)
+    assert "supervisord" in storm["reason"]
+
+
+def test_a_person_starting_an_agent_now_and_then_is_not_a_storm(fake_proc, tmp_path):
+    """One start, then quiet scans. The streak has to reset, or everyone alerts."""
+    settings = cfg(tmp_path)
+    fake_proc.add(900, ["/usr/bin/bash"], comm="bash")
+
+    alerts = []
+    for index in range(6):
+        if index % 3 == 0:
+            fake_proc.remove(1000 + index - 3)
+            fake_proc.add(1000 + index, ["/usr/bin/codex", "exec", PROMPT], comm="codex", ppid=900)
+        _, _, scan_alerts, _ = collector.scan(settings, now=fake_proc.now + index * 60)
+        alerts.extend(scan_alerts)
+
+    assert [alert for alert in alerts if alert["alert_type"] == "parent_spawn_storm"] == []
 
 
 def test_a_running_session_is_recorded_once_not_once_per_scan(fake_proc, tmp_path):

@@ -67,3 +67,63 @@ def test_cooldown_suppresses_then_releases():
     # Cooldown is per alert type and per subject, not global.
     assert not state.in_cooldown(current, "high_cpu", "pid2", now + 60, 3600)
     assert not state.in_cooldown(current, "high_mem", "pid1", now + 60, 3600)
+
+
+def test_a_streak_counts_consecutive_scans_and_resets_on_a_quiet_one():
+    """One quiet scan has to erase the streak.
+
+    The streak stands in for "this parent is in a loop right now". If a gap did
+    not reset it, a parent that starts one agent a day would eventually look
+    identical to a crash loop.
+    """
+    current = state.load("/nonexistent")
+    sample = {"user": "root", "agent": "codex"}
+
+    for index in range(3):
+        streaks = state.update_spawn_streaks(current, 1000 + index * 60, {900: sample})
+    assert streaks[0]["count"] == 3
+    assert streaks[0]["ppid"] == 900
+
+    assert state.update_spawn_streaks(current, 1300, {}) == []
+    assert current["spawn_streaks"] == {}
+
+    streaks = state.update_spawn_streaks(current, 1360, {900: sample})
+    assert streaks[0]["count"] == 1
+
+
+def test_streaks_are_kept_per_parent():
+    current = state.load("/nonexistent")
+    sample = {"user": "root", "agent": "codex"}
+
+    state.update_spawn_streaks(current, 1000, {900: sample, 901: sample})
+    streaks = {
+        record["ppid"]: record
+        for record in state.update_spawn_streaks(current, 1060, {900: sample})
+    }
+
+    assert streaks[900]["count"] == 2
+    assert 901 not in streaks
+
+
+def test_the_fork_counter_yields_a_rate_only_once_it_has_a_previous_reading():
+    current = state.load("/nonexistent")
+
+    assert state.record_fork_count(current, 1000, 500) is None
+    assert state.record_fork_count(current, 1060, 800) == (300, 60)
+
+
+def test_a_reboot_does_not_look_like_a_negative_fork_rate():
+    """The kernel counter restarts at boot; a decrease is not a measurement."""
+    current = state.load("/nonexistent")
+    state.record_fork_count(current, 1000, 900_000)
+
+    assert state.record_fork_count(current, 1060, 12) is None
+    # The new reading still becomes the baseline for the scan after it.
+    assert state.record_fork_count(current, 1120, 40) == (28, 60)
+
+
+def test_an_unavailable_fork_counter_is_not_an_error():
+    current = state.load("/nonexistent")
+
+    assert state.record_fork_count(current, 1000, None) is None
+    assert state.record_fork_count(current, 1060, None) is None
